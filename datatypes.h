@@ -10,13 +10,16 @@
 #include <ucontext.h>
 #define STACKSIZE 32768
 
+typedef enum task_states { ready, suspended} task_state;
+
 // Estrutura que define uma tarefa
 typedef struct task_t
 {
     struct task_t *prev, *next ;
-    int tid ;
-    char* tname;
-    ucontext_t tcontext;
+    int id ;
+    char* name;
+    ucontext_t context;
+    task_state state;
 } task_t ;
 
 // estrutura que define um semáforo

@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+//#define DEBUG
+
 void queue_append (queue_t **queue, queue_t *elem)
 {
 
@@ -9,19 +11,25 @@ void queue_append (queue_t **queue, queue_t *elem)
 
     if(!queue)
     {
+        #ifdef DEBUG
         printf("A fila não existe!\n");
+        #endif
         return;
     }
 
     if(!elem)
     {
+        #ifdef DEBUG
         printf("O elemento é nulo!\n");
+        #endif
         return;
     }
 
     if((elem->next) || (elem->prev))
     {
+        #ifdef DEBUG
         printf("O elemento já pertence a uma fila\n");
+        #endif
         return;
     }
 
@@ -57,25 +65,36 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
 
     if(!queue)
     {
+        #ifdef DEBUG
         printf("A fila não existe!\n");
+        #endif
         return NULL;
     }
 
     if(!(*queue))
     {
+        #ifdef DEBUG
         printf("A fila não deve estar vazia!\n");
+        #endif
+
         return NULL;
     }
 
     if(!elem)
     {
+        #ifdef DEBUG
         printf("O elemento é nulo!\n");
+        #endif
+
         return NULL;
     }
 
     if(!((elem->next) && (elem->prev)))
     {
+        #ifdef DEBUG
         printf("O elemento não pertence a uma fila\n");
+        #endif
+
         return NULL;
     }
 
@@ -100,7 +119,10 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
     }
     else
     {
+        #ifdef DEBUG
         printf("O elemento não pertence a esta fila\n");
+        #endif
+
         return NULL;
     }
 
