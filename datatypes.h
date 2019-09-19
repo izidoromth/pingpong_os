@@ -20,6 +20,8 @@ typedef struct task_t
     char* name;
     ucontext_t context;
     task_state state;
+    int s_prio;
+    int d_prio;
 } task_t ;
 
 // estrutura que define um semáforo

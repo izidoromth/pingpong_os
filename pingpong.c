@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ucontext.h>
+#include <math.h>
 
 #include "pingpong.h"
 #include "queue.h"
 
-int current_id;
+//#define DEBUG
+
+int current_id, aging;
 task_t main_tcb, t_dispatcher;
 task_t *t_current, *task_ready_queue = NULL, *task_suspended_queue = NULL;
 
@@ -16,6 +19,48 @@ task_t* scheduler()
     next = task_ready_queue;
 
     return next;
+}
+task_t* d_prio_scheduler()
+{
+    task_t *tmp = task_ready_queue;
+    task_t *next = tmp;
+    int high_d_prio = next->d_prio;
+
+    do
+    {
+        if(tmp->d_prio <= high_d_prio)
+        {
+            high_d_prio = tmp->d_prio;
+            next = tmp;
+        }
+
+        tmp = tmp->next;
+
+    }while(tmp != task_ready_queue);
+
+    task_aging(next);
+
+    return next;
+}
+
+void task_aging(task_t* next)
+{
+    task_t *tmp = task_ready_queue;
+
+    do
+    {
+        if(tmp != next)
+        {
+            tmp->d_prio += aging;
+        }
+        else
+        {
+            tmp->d_prio = tmp->s_prio;
+        }
+
+        tmp = tmp->next;
+
+    }while(tmp != task_ready_queue);
 }
 
 void dispatcher_body () // dispatcher é uma tarefa
@@ -29,7 +74,7 @@ void dispatcher_body () // dispatcher é uma tarefa
 
     while ( userTasks > 0 )
     {
-        next = scheduler(); // scheduler é uma função
+        next = d_prio_scheduler(); // scheduler é uma função
 
         if (next)
         {
@@ -101,6 +146,8 @@ void pingpong_init ()
 {
     current_id = 0;
 
+    aging = -1;
+
     task_create(&main_tcb,NULL,"Main");
 
     task_create(&t_dispatcher,dispatcher_body,"Dispatcher");
@@ -145,6 +192,9 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
 
     task->id = current_id; current_id++;
     task->name = arg;
+    task->next = NULL;
+    task->prev = NULL;
+    task->d_prio = 0;
 
     if(task != &main_tcb && task != &t_dispatcher)
         queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
@@ -229,4 +279,44 @@ void task_yield ()
     #ifdef DEBUG
     printf ("task_yield: Concluída\n") ;
     #endif
+}
+
+int task_getprio (task_t *task)
+{
+    #ifdef DEBUG
+    printf ("task_getprio: Realizada\n") ;
+    #endif
+
+    if(!task)
+        return t_current->s_prio;
+
+    return task->s_prio;
+}
+
+void task_setprio (task_t *task, int prio)
+{
+    #ifdef DEBUG
+    printf ("task_setprio: Realizada\n") ;
+    #endif
+
+    if(!task)
+    {
+        t_current->s_prio = prio;
+        t_current->d_prio = prio;
+    }
+    else if (prio > 20)
+    {
+        task->s_prio = 20;
+        task->d_prio = 20;
+    }
+    else if (prio < -20)
+    {
+        task->s_prio = -20;
+        task->d_prio = -20;
+    }
+    else
+    {
+        task->s_prio = prio;
+        task->d_prio = prio;
+    }
 }
