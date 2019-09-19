@@ -2,8 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-//#define DEBUG
-
 void queue_append (queue_t **queue, queue_t *elem)
 {
 
@@ -12,7 +10,7 @@ void queue_append (queue_t **queue, queue_t *elem)
     if(!queue)
     {
         #ifdef DEBUG
-        printf("A fila não existe!\n");
+        printf("queue_append: A fila não existe!\n");
         #endif
         return;
     }
@@ -20,7 +18,7 @@ void queue_append (queue_t **queue, queue_t *elem)
     if(!elem)
     {
         #ifdef DEBUG
-        printf("O elemento é nulo!\n");
+        printf("queue_append: O elemento é nulo!\n");
         #endif
         return;
     }
@@ -28,7 +26,7 @@ void queue_append (queue_t **queue, queue_t *elem)
     if((elem->next) || (elem->prev))
     {
         #ifdef DEBUG
-        printf("O elemento já pertence a uma fila\n");
+        printf("queue_append: O elemento já pertence a uma fila\n");
         #endif
         return;
     }
@@ -66,7 +64,7 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
     if(!queue)
     {
         #ifdef DEBUG
-        printf("A fila não existe!\n");
+        printf("queue_remove: A fila não existe!\n");
         #endif
         return NULL;
     }
@@ -74,7 +72,7 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
     if(!(*queue))
     {
         #ifdef DEBUG
-        printf("A fila não deve estar vazia!\n");
+        printf("queue_remove: A fila não deve estar vazia!\n");
         #endif
 
         return NULL;
@@ -83,7 +81,7 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
     if(!elem)
     {
         #ifdef DEBUG
-        printf("O elemento é nulo!\n");
+        printf("queue_remove: O elemento é nulo!\n");
         #endif
 
         return NULL;
@@ -92,7 +90,7 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
     if(!((elem->next) && (elem->prev)))
     {
         #ifdef DEBUG
-        printf("O elemento não pertence a uma fila\n");
+        printf("queue_remove: O elemento não pertence a uma fila\n");
         #endif
 
         return NULL;
@@ -120,7 +118,7 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
     else
     {
         #ifdef DEBUG
-        printf("O elemento não pertence a esta fila\n");
+        printf("queue_remove: O elemento não pertence a esta fila\n");
         #endif
 
         return NULL;

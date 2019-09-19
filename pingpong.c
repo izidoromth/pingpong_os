@@ -5,28 +5,27 @@
 #include "pingpong.h"
 #include "queue.h"
 
-//#define DEBUG
-
 int current_id;
 task_t main_tcb, t_dispatcher;
-task_t *current_task, *task_ready_queue = NULL, *task_suspended_queue = NULL;
+task_t *t_current, *task_ready_queue = NULL, *task_suspended_queue = NULL;
 
 task_t* scheduler()
 {
     task_t* next;
 
-    next = queue_remove((queue_t**)&task_ready_queue,(queue_t*) task_ready_queue);
+    next = task_ready_queue;
 
     return next;
 }
 
-dispatcher_body () // dispatcher é uma tarefa
+void dispatcher_body () // dispatcher é uma tarefa
 {
-
     int userTasks;
     task_t* next;
 
     userTasks = queue_size((queue_t*) task_ready_queue);
+
+    t_current = &t_dispatcher;
 
     while ( userTasks > 0 )
     {
@@ -35,11 +34,12 @@ dispatcher_body () // dispatcher é uma tarefa
         if (next)
         {
             task_switch (next) ; // transfere controle para a tarefa "next"
-            // ações após retornar da tarefa "next", se houverem
         }
+
+        userTasks = queue_size((queue_t*) task_ready_queue);
     }
 
-    task_exit(0) ; // encerra a tarefa dispatcher
+    task_exit(1) ; // encerra a tarefa dispatcher
 }
 
 void task_resume (task_t *task)
@@ -57,18 +57,12 @@ void task_resume (task_t *task)
         return;
     }
 
-    queue_remove((queue_t **) &task_suspended_queue, (queue_t*) task);
-
-    task->state = ready;
-
-    queue_append((queue_t **) &task_ready_queue, (queue_t*) task);
-
     #ifdef DEBUG
     printf ("task_resume: Adição à fila de prontas concluída\n") ;
     #endif
 }
 
-void task_suspend (task_t *task, task_t **queue)
+/*void task_suspend (task_t *task, task_t **queue)
 {
     #ifdef DEBUG
     printf ("task_suspend: Adição à fila de suspensas iniciada\n") ;
@@ -101,7 +95,7 @@ void task_suspend (task_t *task, task_t **queue)
     #ifdef DEBUG
     printf ("task_resume: Adição à fila de suspensas concluída\n") ;
     #endif
-}
+}*/
 
 void pingpong_init ()
 {
@@ -109,11 +103,9 @@ void pingpong_init ()
 
     task_create(&main_tcb,NULL,"Main");
 
-    current_task = &main_tcb;
-
     task_create(&t_dispatcher,dispatcher_body,"Dispatcher");
 
-    task_switch(&t_dispatcher);
+    t_current = &main_tcb;
 
     setvbuf (stdout, 0, _IONBF, 0) ;
 }
@@ -123,7 +115,7 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     char *stack ;
 
     #ifdef DEBUG
-    printf ("task_create: Criação de tarefa iniciada\n") ;
+    printf ("task_create: Criação da tarefa %s iniciada\n",(char*) arg) ;
     #endif
 
     if(!task)
@@ -153,11 +145,11 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
 
     task->id = current_id; current_id++;
     task->name = arg;
-    task->state = ready;
+
+    if(task != &main_tcb && task != &t_dispatcher)
+        queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
 
     makecontext (&task->context, (void*)(*start_routine), 1, arg);
-
-    task_resume(task);
 
     #ifdef DEBUG
     printf ("task_create: Tarefa criada com sucesso!\n") ;
@@ -168,9 +160,10 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
 
 int task_switch (task_t *task)
 {
-    task_t* aux_task;
+    task_t* task_aux;
+
     #ifdef DEBUG
-    printf ("task_switch: Troca de contexto %d -> %d iniciada\n",task_id(),task->id) ;
+    printf ("task_switch: Troca de contexto de %s -> %s iniciada\n",t_current->name,task->name) ;
     #endif
 
     if(!task)
@@ -182,34 +175,58 @@ int task_switch (task_t *task)
         return -1;
     }
 
-    aux_task = current_task;
-
-    current_task = task;
-
     #ifdef DEBUG
     printf ("task_switch: Troca de contexto concluída\n") ;
     #endif
+    task_aux = t_current;
 
-    swapcontext(&aux_task->context, &task->context);
+    t_current = task;
+
+    swapcontext(&task_aux->context, &task->context);
 
     return 1;
 }
 
 void task_exit (int exit_code)
 {
-    task_switch(&main_tcb);
+    #ifdef DEBUG
+    printf ("task_exit: Iniciada\n") ;
+    #endif
+
+    if(exit_code == 0)
+    {
+        queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
+        task_switch(&t_dispatcher);
+    }
+
+    if(exit_code == 1) task_switch(&main_tcb);
+
+    #ifdef DEBUG
+    printf ("task_yield: Concluída\n") ;
+    #endif
 }
 
 int task_id ()
 {
-    return current_task->id;
+    return t_current->id;
 }
 
 void task_yield ()
 {
-    queue_remove((queue_t**) task_ready_queue, (queue_t*) current_task);
+    #ifdef DEBUG
+    printf ("task_yield: Iniciada\n") ;
+    #endif
 
-    queue_append((queue_t**) task_ready_queue, (queue_t*) current_task);
+    if(t_current != &main_tcb)
+    {
+        queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
+
+        queue_append((queue_t**) &task_ready_queue, (queue_t*) t_current);
+    }
 
     task_switch(&t_dispatcher);
+
+    #ifdef DEBUG
+    printf ("task_yield: Concluída\n") ;
+    #endif
 }
