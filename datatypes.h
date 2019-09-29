@@ -11,6 +11,7 @@
 #define STACKSIZE 32768
 
 typedef enum task_states { ready, suspended} task_state;
+typedef enum owner_types { t_user, t_system} task_owner;
 
 // Estrutura que define uma tarefa
 typedef struct task_t
@@ -22,6 +23,8 @@ typedef struct task_t
     task_state state;
     int s_prio;
     int d_prio;
+    task_owner owner;
+    int quantum;
 } task_t ;
 
 // estrutura que define um semáforo

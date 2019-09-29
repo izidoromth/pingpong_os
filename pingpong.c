@@ -2,11 +2,16 @@
 #include <stdlib.h>
 #include <ucontext.h>
 #include <math.h>
+#include <signal.h>
+#include <sys/time.h>
 
 #include "pingpong.h"
 #include "queue.h"
 
 //#define DEBUG
+
+struct sigaction action ;
+struct itimerval timer;
 
 int current_id, aging;
 task_t main_tcb, t_dispatcher;
@@ -63,7 +68,7 @@ void task_aging(task_t* next)
     }while(tmp != task_ready_queue);
 }
 
-void dispatcher_body () // dispatcher é uma tarefa
+void dispatcher_body ()
 {
     int userTasks;
     task_t* next;
@@ -74,17 +79,21 @@ void dispatcher_body () // dispatcher é uma tarefa
 
     while ( userTasks > 0 )
     {
-        next = d_prio_scheduler(); // scheduler é uma função
+        next = scheduler();
 
         if (next)
         {
-            task_switch (next) ; // transfere controle para a tarefa "next"
+            next->quantum = 20;
+
+            task_resume(next);
+
+            task_switch (next) ;
         }
 
         userTasks = queue_size((queue_t*) task_ready_queue);
     }
 
-    task_exit(1) ; // encerra a tarefa dispatcher
+    task_exit(1) ;
 }
 
 void task_resume (task_t *task)
@@ -101,6 +110,14 @@ void task_resume (task_t *task)
 
         return;
     }
+
+    if(task->state == ready)
+        queue_remove((queue_t**) &task_ready_queue, (queue_t*) task);
+
+    if(task->state == suspended)
+        queue_remove((queue_t**) &task_suspended_queue, (queue_t*) task);
+
+    queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
 
     #ifdef DEBUG
     printf ("task_resume: Adição à fila de prontas concluída\n") ;
@@ -142,11 +159,73 @@ void task_resume (task_t *task)
     #endif
 }*/
 
+void tick_handler (int signum)
+{
+    if(t_current == NULL)
+    {
+        #ifdef DEBUG
+        printf("tick_handler: Tarefa corrente nula!\n")
+        #endif
+        return;
+    }
+
+    if(t_current->owner == t_system)
+    {
+        #ifdef DEBUG
+        printf("tick_handler: Tarefa corrente é de sistema!\n")
+        #endif
+        return;
+    }
+
+    if(t_current->quantum == 0)
+    {
+        #ifdef DEBUG
+        printf("tick_handler: Quantum zerado. Retornando ao dispatcher...\n")
+        #endif
+        task_switch(&t_dispatcher);
+    }
+
+    else
+    {
+        #ifdef DEBUG
+        printf("tick_handler: Tick...\n")
+        #endif
+        t_current->quantum -= 1;
+    }
+
+    return;
+}
+
+void set_timer_interrupt()
+{
+  action.sa_handler = tick_handler ;
+  sigemptyset (&action.sa_mask) ;
+  action.sa_flags = 0 ;
+  if (sigaction (SIGALRM, &action, 0) < 0)
+  {
+    perror ("Erro em sigaction: ") ;
+    exit (1) ;
+  }
+
+  timer.it_value.tv_usec = 1 ;
+  timer.it_value.tv_sec  = 0 ;
+  timer.it_interval.tv_usec = 1000 ;
+  timer.it_interval.tv_sec  = 0 ;
+
+  if (setitimer (ITIMER_REAL, &timer, 0) < 0)
+  {
+    perror ("Erro em setitimer: ") ;
+    exit (1) ;
+  }
+}
+
 void pingpong_init ()
 {
     current_id = 0;
 
     aging = -1;
+
+    set_timer_interrupt();
 
     task_create(&main_tcb,NULL,"Main");
 
@@ -195,6 +274,7 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     task->next = NULL;
     task->prev = NULL;
     task->d_prio = 0;
+    task->owner = task->id == 1 ? t_system : t_user;
 
     if(task != &main_tcb && task != &t_dispatcher)
         queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
