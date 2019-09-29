@@ -14,6 +14,7 @@ struct sigaction action ;
 struct itimerval timer;
 
 int current_id, aging;
+unsigned int time_ms;
 task_t main_tcb, t_dispatcher;
 task_t *t_current, *task_ready_queue = NULL, *task_suspended_queue = NULL;
 
@@ -25,6 +26,7 @@ task_t* scheduler()
 
     return next;
 }
+
 task_t* d_prio_scheduler()
 {
     task_t *tmp = task_ready_queue;
@@ -79,7 +81,7 @@ void dispatcher_body ()
 
     while ( userTasks > 0 )
     {
-        next = scheduler();
+        next = d_prio_scheduler();
 
         if (next)
         {
@@ -159,8 +161,15 @@ void task_resume (task_t *task)
     #endif
 }*/
 
+unsigned int systime()
+{
+    return time_ms;
+}
+
 void tick_handler (int signum)
 {
+    time_ms++;
+
     if(t_current == NULL)
     {
         #ifdef DEBUG
@@ -168,6 +177,8 @@ void tick_handler (int signum)
         #endif
         return;
     }
+
+    t_current->time_process++;
 
     if(t_current->owner == t_system)
     {
@@ -177,12 +188,12 @@ void tick_handler (int signum)
         return;
     }
 
-    if(t_current->quantum == 0)
+    if(t_current->quantum == 1)
     {
         #ifdef DEBUG
         printf("tick_handler: Quantum zerado. Retornando ao dispatcher...\n")
         #endif
-        task_switch(&t_dispatcher);
+        task_yield();
     }
 
     else
@@ -224,6 +235,8 @@ void pingpong_init ()
     current_id = 0;
 
     aging = -1;
+
+    time_ms = -1;
 
     set_timer_interrupt();
 
@@ -275,6 +288,9 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     task->prev = NULL;
     task->d_prio = 0;
     task->owner = task->id == 1 ? t_system : t_user;
+    task->time_init = systime();
+    task->time_process = 0;
+    task->activations = 0;
 
     if(task != &main_tcb && task != &t_dispatcher)
         queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
@@ -308,9 +324,14 @@ int task_switch (task_t *task)
     #ifdef DEBUG
     printf ("task_switch: Troca de contexto concluída\n") ;
     #endif
+
+    if(t_current->activations == 0) t_current->time_init = systime();
+
     task_aux = t_current;
 
     t_current = task;
+
+    t_current->activations++;
 
     swapcontext(&task_aux->context, &task->context);
 
@@ -322,6 +343,8 @@ void task_exit (int exit_code)
     #ifdef DEBUG
     printf ("task_exit: Iniciada\n") ;
     #endif
+
+    printf("Task %d exit: execution time %4d ms, processor time %4d ms, %d activations\n",t_current->id, systime() - t_current->time_init, t_current->time_process, t_current->activations);
 
     if(exit_code == 0)
     {
