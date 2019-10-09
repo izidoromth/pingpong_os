@@ -114,8 +114,10 @@ void task_resume (task_t *task)
     if(task->state == ready)
         queue_remove((queue_t**) &task_ready_queue, (queue_t*) task);
 
-    if(task->state == suspended)
+    else if(task->state == suspended)
         queue_remove((queue_t**) &task_suspended_queue, (queue_t*) task);
+
+    task->state = ready;
 
     queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
 
@@ -124,40 +126,33 @@ void task_resume (task_t *task)
     #endif
 }
 
-/*void task_suspend (task_t *task, task_t **queue)
+void task_suspend (task_t *task, task_t **queue)
 {
     #ifdef DEBUG
     printf ("task_suspend: Adição à fila de suspensas iniciada\n") ;
     #endif
 
-    if(!task)
-    {
-        #ifdef DEBUG
-        printf ("task_suspend: Tarefa não pode ser nula\n") ;
-        #endif
+    task_t* t_suspend = task;
 
-        return;
+    if(!t_suspend)
+    {
+        t_suspend = t_current;
     }
 
-    if(task->state == suspended)
-    {
-        #ifdef DEBUG
-        printf ("task_suspend: Tarefa já pertence a fila de suspensas\n") ;
-        #endif
+    if(t_suspend->state == ready)
+        queue_remove((queue_t **) &task_ready_queue, (queue_t*) t_suspend);
 
-        return;
-    }
-
-    queue_remove((queue_t **) &task_ready_queue, (queue_t*) task);
+    else if(t_suspend->state == suspended)
+        queue_remove((queue_t **) &task_suspended_queue, (queue_t*) t_suspend);
 
     task->state = suspended;
 
-    queue_append((queue_t **) &task_suspended_queue, (queue_t*) task);
+    queue_append((queue_t **) queue, (queue_t*) task);
 
     #ifdef DEBUG
     printf ("task_resume: Adição à fila de suspensas concluída\n") ;
     #endif
-}*/
+}
 
 unsigned int systime()
 {
@@ -191,6 +186,9 @@ void tick_handler (int signum)
         #ifdef DEBUG
         printf("tick_handler: Quantum zerado. Retornando ao dispatcher...\n")
         #endif
+
+        task_resume(t_current);
+
         task_yield();
     }
 
@@ -294,9 +292,10 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     task->quantum = sys_quantum;
     task->time_process = 0;
     task->activations = 0;
+    task->state = ready;
 
-    if(task != &main_tcb && task != &t_dispatcher)
-        queue_append((queue_t**) &task_ready_queue, (queue_t*) task);
+    if(task != &t_dispatcher)
+        task_resume(task);
 
     makecontext (&task->context, (void*)(*start_routine), 1, arg);
 
@@ -349,13 +348,15 @@ void task_exit (int exit_code)
 
     printf("Task %d exit: execution time %4d ms, processor time %4d ms, %d activations\n",t_current->id, systime() - t_current->time_init, t_current->time_process, t_current->activations);
 
-    if(exit_code == 0)
-    {
-        queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
-        task_switch(&t_dispatcher);
-    }
+    queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
 
-    if(exit_code == 1) task_switch(&main_tcb);
+    queue_remove((queue_t**) &task_suspended_queue, (queue_t*) t_current);
+
+    t_current->exit_code = exit_code;
+
+    t_current->state = finished;
+
+    task_switch(&t_dispatcher);
 
     #ifdef DEBUG
     printf ("task_yield: Concluída\n") ;
@@ -372,8 +373,6 @@ void task_yield ()
     #ifdef DEBUG
     printf ("task_yield: Iniciada\n") ;
     #endif
-
-    task_resume(t_current);
 
     task_switch(&t_dispatcher);
 
@@ -420,4 +419,30 @@ void task_setprio (task_t *task, int prio)
         task->s_prio = prio;
         task->d_prio = prio;
     }
+}
+
+int task_join (task_t *task)
+{
+    #ifdef DEBUG
+    printf ("task_join: Iniciada\n") ;
+    #endif
+
+    if(!task || task->state == finished)
+    {
+        #ifdef DEBUG
+        printf ("task_join: Tarefa não existe ou finalizada\n") ;
+        #endif
+
+        return -1;
+    }
+
+    task_suspend(t_current,&task_suspended_queue);
+
+    task_yield();
+
+    #ifdef DEBUG
+    printf ("task_join: Concluída\n") ;
+    #endif
+
+    return task->exit_code;
 }
