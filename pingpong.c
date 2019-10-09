@@ -13,7 +13,7 @@
 struct sigaction action ;
 struct itimerval timer;
 
-int current_id, aging;
+int current_id, aging, sys_quantum;
 unsigned int time_ms;
 task_t main_tcb, t_dispatcher;
 task_t *t_current, *task_ready_queue = NULL, *task_suspended_queue = NULL;
@@ -35,7 +35,7 @@ task_t* d_prio_scheduler()
 
     do
     {
-        if(tmp->d_prio <= high_d_prio)
+        if(tmp->d_prio < high_d_prio)
         {
             high_d_prio = tmp->d_prio;
             next = tmp;
@@ -77,15 +77,13 @@ void dispatcher_body ()
 
     userTasks = queue_size((queue_t*) task_ready_queue);
 
-    t_current = &t_dispatcher;
-
     while ( userTasks > 0 )
     {
         next = d_prio_scheduler();
 
         if (next)
         {
-            next->quantum = 20;
+            next->quantum = sys_quantum;
 
             task_resume(next);
 
@@ -238,6 +236,8 @@ void pingpong_init ()
 
     time_ms = -1;
 
+    sys_quantum = 20;
+
     set_timer_interrupt();
 
     task_create(&main_tcb,NULL,"Main");
@@ -245,6 +245,8 @@ void pingpong_init ()
     task_create(&t_dispatcher,dispatcher_body,"Dispatcher");
 
     t_current = &main_tcb;
+
+    task_yield();
 
     setvbuf (stdout, 0, _IONBF, 0) ;
 }
@@ -289,6 +291,7 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     task->d_prio = 0;
     task->owner = task->id == 1 ? t_system : t_user;
     task->time_init = systime();
+    task->quantum = sys_quantum;
     task->time_process = 0;
     task->activations = 0;
 
@@ -370,12 +373,7 @@ void task_yield ()
     printf ("task_yield: Iniciada\n") ;
     #endif
 
-    if(t_current != &main_tcb)
-    {
-        queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
-
-        queue_append((queue_t**) &task_ready_queue, (queue_t*) t_current);
-    }
+    task_resume(t_current);
 
     task_switch(&t_dispatcher);
 
