@@ -27,6 +27,26 @@ task_t* scheduler()
     return next;
 }
 
+void task_aging(task_t* next)
+{
+    task_t *tmp = task_ready_queue;
+
+    do
+    {
+        if(tmp != next)
+        {
+            tmp->d_prio += aging;
+        }
+        else
+        {
+            tmp->d_prio = tmp->s_prio;
+        }
+
+        tmp = tmp->next;
+
+    }while(tmp != task_ready_queue);
+}
+
 task_t* d_prio_scheduler()
 {
     task_t *tmp = task_ready_queue;
@@ -50,26 +70,6 @@ task_t* d_prio_scheduler()
     return next;
 }
 
-void task_aging(task_t* next)
-{
-    task_t *tmp = task_ready_queue;
-
-    do
-    {
-        if(tmp != next)
-        {
-            tmp->d_prio += aging;
-        }
-        else
-        {
-            tmp->d_prio = tmp->s_prio;
-        }
-
-        tmp = tmp->next;
-
-    }while(tmp != task_ready_queue);
-}
-
 void dispatcher_body ()
 {
     int userTasks;
@@ -84,8 +84,6 @@ void dispatcher_body ()
         if (next)
         {
             next->quantum = sys_quantum;
-
-            task_resume(next);
 
             task_switch (next) ;
         }
@@ -115,7 +113,7 @@ void task_resume (task_t *task)
         queue_remove((queue_t**) &task_ready_queue, (queue_t*) task);
 
     else if(task->state == suspended)
-        queue_remove((queue_t**) &task_suspended_queue, (queue_t*) task);
+        queue_remove((queue_t**) &t_current->waiting_tasks, (queue_t*) task);
 
     task->state = ready;
 
@@ -145,9 +143,9 @@ void task_suspend (task_t *task, task_t **queue)
     else if(t_suspend->state == suspended)
         queue_remove((queue_t **) &task_suspended_queue, (queue_t*) t_suspend);
 
-    task->state = suspended;
+    t_suspend->state = suspended;
 
-    queue_append((queue_t **) queue, (queue_t*) task);
+    queue_append((queue_t **) queue, (queue_t*) t_suspend);
 
     #ifdef DEBUG
     printf ("task_resume: Adição à fila de suspensas concluída\n") ;
@@ -293,6 +291,7 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     task->time_process = 0;
     task->activations = 0;
     task->state = ready;
+    task->waiting_tasks = NULL;
 
     if(task != &t_dispatcher)
         task_resume(task);
@@ -348,13 +347,19 @@ void task_exit (int exit_code)
 
     printf("Task %d exit: execution time %4d ms, processor time %4d ms, %d activations\n",t_current->id, systime() - t_current->time_init, t_current->time_process, t_current->activations);
 
-    queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
-
-    queue_remove((queue_t**) &task_suspended_queue, (queue_t*) t_current);
-
     t_current->exit_code = exit_code;
 
     t_current->state = finished;
+
+    queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
+
+    task_t *t_resume = t_current->waiting_tasks;
+
+    while(t_resume)
+    {
+        task_resume(t_resume);
+        t_resume = t_current->waiting_tasks;
+    }
 
     task_switch(&t_dispatcher);
 
@@ -436,7 +441,7 @@ int task_join (task_t *task)
         return -1;
     }
 
-    task_suspend(t_current,&task_suspended_queue);
+    task_suspend(t_current,&task->waiting_tasks);
 
     task_yield();
 
