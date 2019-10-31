@@ -16,7 +16,7 @@ struct itimerval timer;
 int current_id, aging, sys_quantum;
 unsigned int time_ms;
 task_t main_tcb, t_dispatcher;
-task_t *t_current, *task_ready_queue = NULL, *task_suspended_queue = NULL;
+task_t *t_current, *task_ready_queue = NULL, *task_asleep_queue = NULL;
 
 task_t* scheduler()
 {
@@ -51,7 +51,12 @@ task_t* d_prio_scheduler()
 {
     task_t *tmp = task_ready_queue;
     task_t *next = tmp;
-    int high_d_prio = next->d_prio;
+    int high_d_prio;
+
+    if(!next)
+        return NULL;
+
+    high_d_prio = next->d_prio;
 
     do
     {
@@ -70,6 +75,31 @@ task_t* d_prio_scheduler()
     return next;
 }
 
+void wakeup_sleeping()
+{
+    task_t* slp_iterator, *slp_aux = NULL;
+    int current_time;
+
+    slp_iterator = task_asleep_queue;
+
+    while(slp_iterator)
+    {
+        slp_aux = slp_iterator->next;
+
+        current_time = systime();
+
+        if(current_time >= slp_iterator->time_wakeup)
+        {
+            task_resume(slp_iterator);
+        }
+
+        if(slp_aux == task_asleep_queue || !task_asleep_queue)
+            slp_iterator = NULL;
+        else
+            slp_iterator = slp_aux;
+    }
+}
+
 void dispatcher_body ()
 {
     int userTasks;
@@ -79,6 +109,8 @@ void dispatcher_body ()
 
     while ( userTasks > 0 )
     {
+        wakeup_sleeping();
+
         next = d_prio_scheduler();
 
         if (next)
@@ -88,7 +120,7 @@ void dispatcher_body ()
             task_switch (next) ;
         }
 
-        userTasks = queue_size((queue_t*) task_ready_queue);
+        userTasks = queue_size((queue_t*) task_ready_queue) + queue_size((queue_t*) task_asleep_queue);
     }
 
     task_exit(1) ;
@@ -113,7 +145,10 @@ void task_resume (task_t *task)
         queue_remove((queue_t**) &task_ready_queue, (queue_t*) task);
 
     else if(task->state == suspended)
-        queue_remove((queue_t**) &t_current->waiting_tasks, (queue_t*) task);
+    {
+        queue_remove((queue_t**) &t_current->suspended_tasks, (queue_t*) task);
+        queue_remove((queue_t**) &task_asleep_queue, (queue_t*) task);
+    }
 
     task->state = ready;
 
@@ -141,7 +176,7 @@ void task_suspend (task_t *task, task_t **queue)
         queue_remove((queue_t **) &task_ready_queue, (queue_t*) t_suspend);
 
     else if(t_suspend->state == suspended)
-        queue_remove((queue_t **) &task_suspended_queue, (queue_t*) t_suspend);
+        queue_remove((queue_t **) &task_asleep_queue, (queue_t*) t_suspend);
 
     t_suspend->state = suspended;
 
@@ -291,7 +326,7 @@ int task_create (task_t *task, void (*start_routine)(void *), void *arg)
     task->time_process = 0;
     task->activations = 0;
     task->state = ready;
-    task->waiting_tasks = NULL;
+    task->suspended_tasks = NULL;
 
     if(task != &t_dispatcher)
         task_resume(task);
@@ -353,12 +388,12 @@ void task_exit (int exit_code)
 
     queue_remove((queue_t**) &task_ready_queue, (queue_t*) t_current);
 
-    task_t *t_resume = t_current->waiting_tasks;
+    task_t *t_resume = t_current->suspended_tasks;
 
     while(t_resume)
     {
         task_resume(t_resume);
-        t_resume = t_current->waiting_tasks;
+        t_resume = t_current->suspended_tasks;
     }
 
     task_switch(&t_dispatcher);
@@ -441,7 +476,7 @@ int task_join (task_t *task)
         return -1;
     }
 
-    task_suspend(t_current,&task->waiting_tasks);
+    task_suspend(t_current,&task->suspended_tasks);
 
     task_yield();
 
@@ -450,4 +485,21 @@ int task_join (task_t *task)
     #endif
 
     return task->exit_code;
+}
+
+void task_sleep (int t)
+{
+    #ifdef DEBUG
+    printf ("task_sleep: Iniciada\n") ;
+    #endif
+
+    t_current->time_wakeup = systime() + t*1000;
+
+    task_suspend(t_current, &task_asleep_queue);
+
+    task_yield();
+
+    #ifdef DEBUG
+    printf ("task_sleep: Concluída\n") ;
+    #endif
 }

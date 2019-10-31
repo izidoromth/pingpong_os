@@ -27,9 +27,10 @@ typedef struct task_t
     int quantum;
     unsigned int time_init;
     unsigned int time_process;
+    unsigned int time_wakeup;
     int activations;
     int exit_code;
-    struct task_t* waiting_tasks;
+    struct task_t* suspended_tasks;
 } task_t ;
 
 // estrutura que define um semáforo
