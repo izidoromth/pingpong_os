@@ -7,7 +7,7 @@ Pingpong OS trata-se de um projeto acâdemico realizado para a disciplina de Sis
 
 Antes de clonar qualquer um dos projetos encontrador aqui, lembre-se que os professores costumam fazer uma análise de plágio em cada arquivo entregue. Plágio também é crime [Art. 184 – Código Penal](https://www.jusbrasil.com.br/topicos/10615003/artigo-184-do-decreto-lei-n-2848-de-07-de-dezembro-de-1940)
 
-###ANDAMENTO
+### ANDAMENTO
 
 - [x] p00
 - [x] p01
