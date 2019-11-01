@@ -503,3 +503,144 @@ void task_sleep (int t)
     printf ("task_sleep: Concluída\n") ;
     #endif
 }
+
+
+//---------------------------------------------------------------------------
+//-------------------IMPLEMENTAÇÃO FUNÇÕES DE SEMÁFORO-----------------------
+
+int sem_create (semaphore_t *s, int value)
+{
+    if(!s)
+    {
+        #ifdef DEBUG
+        printf ("sem_create: Ponteiro para semáforo nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    s->counter = value;
+    s->task_queue = NULL;
+
+    #ifdef DEBUG
+    printf ("sem_create: Semáforo criado com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+int sem_down (semaphore_t *s)
+{
+    if(!s)
+    {
+        #ifdef DEBUG
+        printf ("sem_down: Ponteiro para semáforo nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    s->counter--;
+
+    if(s->counter < 0)
+    {
+        task_suspend(t_current, &s->task_queue);
+
+        task_yield();
+
+        if(!s->task_queue)
+        {
+            #ifdef DEBUG
+            printf ("sem_down:O semafóro foi destruído!\n") ;
+            #endif
+
+            return -1;
+        }
+    }
+
+    #ifdef DEBUG
+    printf ("sem_down: Operação realizada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+int sem_up(semaphore_t* s)
+{
+    task_t* task_wake;
+
+    if(!s)
+    {
+        #ifdef DEBUG
+        printf ("sem_up: Ponteiro para semáforo nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    s->counter++;
+
+    if(s->counter <= 0)
+    {
+        task_wake = s->task_queue;
+
+        queue_remove((queue_t**) &s->task_queue, (queue_t*) task_wake);
+
+        if(!task_wake)
+        {
+            #ifdef DEBUG
+            printf ("sem_up: Tarefa para acordar nula\n") ;
+            #endif
+
+            return -1;
+        }
+
+        task_resume(task_wake);
+    }
+
+    #ifdef DEBUG
+    printf ("sem_up: Operação realizada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+int sem_destroy (semaphore_t *s)
+{
+    task_t* wake_itr;
+
+    if(!s)
+    {
+        #ifdef DEBUG
+        printf ("sem_detroy: Ponteiro para semáforo nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    if(!s->task_queue)
+    {
+        #ifdef DEBUG
+        printf ("sem_detroy: Nenhuma tarefa para acordar. Operação finalizada!\n") ;
+        #endif
+
+        return 0;
+    }
+
+    wake_itr = s->task_queue;
+
+    while(wake_itr)
+    {
+        queue_remove((queue_t**) &s->task_queue, (queue_t*) wake_itr);
+
+        task_resume(wake_itr);
+
+        wake_itr = s->task_queue;
+    }
+
+    #ifdef DEBUG
+    printf ("sem_destroy: Operação realizada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
