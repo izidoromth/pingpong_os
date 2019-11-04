@@ -380,7 +380,9 @@ void task_exit (int exit_code)
     printf ("task_exit: Iniciada\n") ;
     #endif
 
+    #ifdef PROCTIMEDEBUG
     printf("Task %d exit: execution time %4d ms, processor time %4d ms, %d activations\n",t_current->id, systime() - t_current->time_init, t_current->time_process, t_current->activations);
+    #endif
 
     t_current->exit_code = exit_code;
 
@@ -638,8 +640,143 @@ int sem_destroy (semaphore_t *s)
         wake_itr = s->task_queue;
     }
 
+    free(s);
+
     #ifdef DEBUG
     printf ("sem_destroy: Operação realizada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+//---------------------------------------------------------------------------
+//-------------------IMPLEMENTAÇÃO FUNÇÕES DE BARREIRA-----------------------
+
+int barrier_create (barrier_t *b, int N)
+{
+    if(!b)
+    {
+        #ifdef DEBUG
+        printf ("barrier_create: Ponteiro para barreira não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    if(N <= 0)
+    {
+        #ifdef DEBUG
+        printf ("barrier_join: Tamanho da barreira deve ser maior que 0\n") ;
+        #endif
+
+        return -1;
+    }
+
+    b->counter = N;
+    b->task_queue = NULL;
+
+    #ifdef DEBUG
+    printf ("barrier_create: Barreira criada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+int barrier_join (barrier_t *b)
+{
+    task_t* wake_itr;
+
+    if(!b)
+    {
+        #ifdef DEBUG
+        printf ("barrier_join: Ponteiro para barreira não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    if(queue_size((queue_t*) b->task_queue) < b->counter - 1)
+    {
+        task_suspend(t_current, &b->task_queue);
+
+        task_yield();
+
+        if(!b->task_queue)
+        {
+            #ifdef DEBUG
+            printf ("barrier_join: A barreira foi destruída!\n") ;
+            #endif
+
+            return -1;
+        }
+    }
+    else
+    {
+        if(!b->task_queue)
+        {
+            #ifdef DEBUG
+            printf ("barrier_join: Barreira inexistente!\n") ;
+            #endif
+
+            return -1;
+        }
+
+        wake_itr = b->task_queue;
+
+        while(wake_itr)
+        {
+            queue_remove((queue_t**) &b->task_queue, (queue_t*) wake_itr);
+
+            task_resume(wake_itr);
+
+            wake_itr = b->task_queue;
+        }
+    }
+
+    #ifdef DEBUG
+    printf ("barrier_join: Operação realizada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+int barrier_destroy (barrier_t *b)
+{
+    task_t* wake_itr;
+
+    if(!b)
+    {
+        #ifdef DEBUG
+        printf ("barrier_destroy: Ponteiro para barreira nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    if(!b->task_queue)
+    {
+        #ifdef DEBUG
+        printf ("barrier_destroy: Nenhuma tarefa para acordar. Operação finalizada!\n") ;
+        #endif
+
+        return 0;
+    }
+
+    wake_itr = b->task_queue;
+
+    while(wake_itr)
+    {
+        queue_remove((queue_t**) &b->task_queue, (queue_t*) wake_itr);
+
+        task_resume(wake_itr);
+
+        wake_itr = b->task_queue;
+    }
+
+    free(b);
+
+    #ifdef DEBUG
+    printf ("barrier_destroy: Operação realizada com sucesso!\n") ;
     #endif
 
     return 0;

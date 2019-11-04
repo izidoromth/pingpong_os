@@ -47,9 +47,10 @@ typedef struct
 } mutex_t ;
 
 // estrutura que define uma barreira
-typedef struct
+typedef struct barrier_t
 {
-  // preencher quando necessário
+    int counter;
+    struct task_t* task_queue;
 } barrier_t ;
 
 // estrutura que define uma fila de mensagens
