@@ -20,7 +20,7 @@ Antes de clonar qualquer um dos projetos encontrador aqui, lembre-se que os prof
 - [x] p08
 - [x] p09
 - [x] p10
-- [ ] p11
+- [x] p11
 - [ ] p12
 - [ ] p13
 - [ ] p14
