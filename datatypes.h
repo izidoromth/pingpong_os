@@ -53,10 +53,25 @@ typedef struct barrier_t
     struct task_t* task_queue;
 } barrier_t ;
 
-// estrutura que define uma fila de mensagens
-typedef struct
+typedef struct message
 {
+    struct message *prev, *next;
+    void *buffer;
+}message;
+
+// estrutura que define uma fila de mensagens
+typedef struct mqueue_t
+{
+    int max_msg;
+    int msg_size;
+    int num_msgs;
+    void *buffer;
+    semaphore_t buffer_sem;
+    semaphore_t items_sem;
+    semaphore_t available_sem;
   // preencher quando necessário
 } mqueue_t ;
+
+
 
 #endif

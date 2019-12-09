@@ -4,6 +4,7 @@
 #include <math.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <string.h>
 
 #include "pingpong.h"
 #include "queue.h"
@@ -626,6 +627,8 @@ int sem_destroy (semaphore_t *s)
         printf ("sem_detroy: Nenhuma tarefa para acordar. Operação finalizada!\n") ;
         #endif
 
+        s = NULL;
+
         return 0;
     }
 
@@ -640,7 +643,7 @@ int sem_destroy (semaphore_t *s)
         wake_itr = s->task_queue;
     }
 
-    free(s);
+    s = NULL;
 
     #ifdef DEBUG
     printf ("sem_destroy: Operação realizada com sucesso!\n") ;
@@ -780,4 +783,143 @@ int barrier_destroy (barrier_t *b)
     #endif
 
     return 0;
+}
+
+int mqueue_create (mqueue_t *queue, int max, int size)
+{
+    if(!queue)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_create: Ponteiro para fila de mensagens não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    if(max <= 0)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_create: Número de mensagens deve ser maior que 0\n") ;
+        #endif
+
+        return -1;
+    }
+
+    if(size <= 0)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_create: Tamanho das mensagens deve ser maior que 0\n") ;
+        #endif
+
+        return -1;
+    }
+
+    queue->max_msg = max;
+    queue->msg_size = size;
+    queue->buffer = malloc(queue->max_msg*queue->msg_size);
+    queue->num_msgs = 0;
+
+    sem_create(&queue->buffer_sem, 1);
+    sem_create(&queue->available_sem, queue->max_msg);
+    sem_create(&queue->items_sem, 0);
+
+    #ifdef DEBUG
+    printf ("mqueue_create: Operação realizada com sucesso!\n") ;
+    #endif
+
+    return 0;
+}
+
+int mqueue_send (mqueue_t *queue, void *msg)
+{
+    if(!queue)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_send: Ponteiro para barreira não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    sem_down(&queue->available_sem);
+    sem_down(&queue->buffer_sem);
+
+    void* new_msg = queue->buffer + (queue->num_msgs*queue->msg_size);
+
+    memcpy(new_msg, msg, queue->msg_size);
+    queue->num_msgs++;
+
+    sem_up(&queue->buffer_sem);
+    sem_up(&queue->items_sem);
+
+    return 0;
+}
+
+int mqueue_recv (mqueue_t *queue, void *msg)
+{
+    if(!queue)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_recv: Ponteiro para barreira não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    void *itr1, *itr2;
+
+    sem_down(&queue->items_sem);
+    sem_down(&queue->buffer_sem);
+
+    memcpy(msg, queue->buffer, queue->msg_size);
+
+    itr1 = queue->buffer;
+    itr2 = queue->buffer + queue->msg_size;
+
+    while(itr2 < (queue->buffer + queue->num_msgs*queue->msg_size))
+    {
+        memcpy(itr1, itr2, queue->msg_size);
+        itr1 += queue->msg_size;
+        itr2 += queue->msg_size;
+    }
+
+    queue->num_msgs--;
+
+    sem_up(&queue->buffer_sem);
+    sem_up(&queue->available_sem);
+
+    return 0;
+}
+
+int mqueue_destroy (mqueue_t *queue)
+{
+    if(!queue)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_destroy: Ponteiro para barreira não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    queue->buffer = NULL;
+    sem_destroy(&queue->available_sem);
+    sem_destroy(&queue->buffer_sem);
+    sem_destroy(&queue->items_sem);
+
+    return 0;
+}
+
+int mqueue_msgs (mqueue_t *queue)
+{
+    if(!queue)
+    {
+        #ifdef DEBUG
+        printf ("mqueue_msgs: Ponteiro para barreira não pode nulo\n") ;
+        #endif
+
+        return -1;
+    }
+
+    return queue->num_msgs;
 }

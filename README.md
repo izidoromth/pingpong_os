@@ -21,6 +21,6 @@ Antes de clonar qualquer um dos projetos encontrador aqui, lembre-se que os prof
 - [x] p09
 - [x] p10
 - [x] p11
-- [ ] p12
+- [x] p12
 - [ ] p13
 - [ ] p14
